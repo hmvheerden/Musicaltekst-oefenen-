@@ -7,51 +7,309 @@ window.ScriptParser = (() => {
   const songStartRx = /^(?:(?:LIED|SONG|MUZIEKNUMMER|MUSICALNUMMER|ZANGNUMMER|ZANG|NUMMER)\b|(?:REFREIN|COUPLET|VERSE|CHORUS|BRIDGE)\b|[♪♫])[\s:.\-–—0-9A-Za-zÀ-ÖØ-öø-ÿ’'"()[\]]*$/iu;
   const songBracketStartRx = /^(?:\[(?:LIED|SONG|MUZIEK|ZANG)[^\]]*\]|\((?:LIED|SONG|MUZIEK|ZANG)[^)]*\))$/iu;
   const songEndRx = /^(?:EINDE\s+(?:LIED|SONG|NUMMER|MUZIEK)|LIED\s+AFGELOPEN|MUZIEK\s+STOPT|ZANG\s+STOPT|DIALOOG|APPLAUS)\b/i;
-  let lastSongFilterInfo={sections:0,lines:0};
+
+  const knownSongTitles = new Set([
+    "nu",
+    "nu reprise",
+    "katholiek en hugenoot",
+    "katholieke hugenoot",
+    "katholiek of hugenoot",
+    "parijs",
+    "o heer",
+    "oorlog",
+    "een voor allen",
+    "een voor allen en allen voor een",
+    "ik ben een vrouw",
+    "constance",
+    "mannen"
+  ]);
+
+  let lastSongFilterInfo={sections:0,lines:0,titles:[]};
+
+  function normalizeSongTitle(value){
+    return String(value||"")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"")
+      .replace(/[’‘`´]/g,"'")
+      .replace(/\([^)]*\)/g," ")
+      .replace(/[^A-Za-z0-9' ]/g," ")
+      .replace(/\s+/g," ")
+      .trim()
+      .toLowerCase();
+  }
 
   function isSceneOrActHeading(line){
     return /^(?:AKTE|ACT|SC[ÈE]NE|SCENE)\s*[.:\-]?\s*/i.test(line);
   }
-  function isSongStart(line){
-    const value=String(line||"").trim();
-    if(!value)return false;
-    return songStartRx.test(value)||songBracketStartRx.test(value);
+
+  function isSpeakerLine(line){
+    return /^[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ0-9’' .+&()\/-]{0,45}\s*:\s*\S/u.test(String(line||"").trim());
   }
+
+  function isKnownSongTitle(line){
+    return knownSongTitles.has(normalizeSongTitle(line));
+  }
+
+  function isUppercaseTitleCandidate(line){
+    const value=String(line||"").trim();
+    if(!value||value.includes(":")||isSceneOrActHeading(value))return false;
+    if(/^(?:LOCATIE|DECOR|DECORWISSEL|DECORWISSELING|LICHT|INSTRUMENTAAL|UNDERSCORE|INTRO|CUE)\b/i.test(value))return false;
+
+    const cleaned=value.replace(/[0-9.()[\]'"’‘`´:;!?–—-]/g," ").replace(/\s+/g," ").trim();
+    if(!cleaned)return false;
+
+    const words=cleaned.split(" ");
+    if(words.length>8)return false;
+
+    const letters=cleaned.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g,"");
+    if(letters.length<2)return false;
+
+    return letters===letters.toUpperCase();
+  }
+
+  function hasSongLikeLayout(lines,startIndex){
+    let speakerLines=0;
+    let continuationLines=0;
+    let repeatedGroupLines=0;
+    let inspected=0;
+
+    for(let i=startIndex+1;i<lines.length&&inspected<28;i++){
+      const line=lines[i].trim();
+      if(!line)continue;
+      if(isSceneOrActHeading(line))break;
+      if(/^(?:LOCATIE|DECORWISSEL|DECORWISSELING)\b/i.test(line)&&inspected>0)break;
+
+      inspected++;
+      if(isSpeakerLine(line)){
+        speakerLines++;
+        if(/^(?:ALLEN|ENSEMBLE|MANNEN|VROUWEN|HUGENOTEN|KATHOLIEKEN|BEIDEN|KOOR)\s*:/i.test(line)){
+          repeatedGroupLines++;
+        }
+      }else if(line.length>=12){
+        continuationLines++;
+      }
+    }
+
+    return (
+      (speakerLines>=3&&continuationLines>=4) ||
+      (speakerLines>=2&&continuationLines>=7) ||
+      (speakerLines>=2&&repeatedGroupLines>=1&&continuationLines>=4)
+    );
+  }
+
+  function isSongStartAt(lines,index){
+    const value=String(lines[index]||"").trim();
+    if(!value)return false;
+    if(songStartRx.test(value)||songBracketStartRx.test(value)||isKnownSongTitle(value))return true;
+    return isUppercaseTitleCandidate(value)&&hasSongLikeLayout(lines,index);
+  }
+
+  function looksLikeStageDirection(line){
+    const value=String(line||"").trim();
+    if(!value||isSpeakerLine(value))return false;
+
+    if(/^(?:INSTRUMENTAAL|UNDERSCORE|DECOR|DECORWISSEL|DECORWISSELING|LOCATIE|LICHT|FADE|BLACK-?OUT|PAUZE)\b/i.test(value)){
+      return true;
+    }
+
+    return /\b(?:op|af|loopt|lopen|komt|komen|botst|pakt|pakt ze|kijkt|gaat|gaan|valt|vallen|raapt|geeft|zegt niks|draait|verschijnt|verdwijnt|wisselt|staan|staat|zit|zitten|wordt|worden)\b/i.test(value)
+      && /[.!?)]$/.test(value);
+  }
+
+  function nextNonEmptyIndex(lines,index,maxLookahead=4){
+    for(let i=index+1;i<lines.length&&i<=index+maxLookahead;i++){
+      if(lines[i].trim())return i;
+    }
+    return -1;
+  }
+
+  function shouldEndImplicitSong(lines,index,skippedSinceStart){
+    if(skippedSinceStart<6)return false;
+
+    const line=lines[index].trim();
+    if(!line)return false;
+
+    if(isSceneOrActHeading(line)||songEndRx.test(line))return true;
+
+    const nextIndex=nextNonEmptyIndex(lines,index,3);
+    const nextLine=nextIndex>=0?lines[nextIndex].trim():"";
+
+    // Een toneelaanwijzing gevolgd door gewone dialoog markeert meestal het einde.
+    if(looksLikeStageDirection(line)&&isSpeakerLine(nextLine))return true;
+
+    // Ook een instrumentale/toneelovergang gevolgd door dialoog beëindigt het lied.
+    if(/^(?:INSTRUMENTAAL|UNDERSCORE|DECORWISSEL|DECORWISSELING|FADE|BLACK-?OUT)\b/i.test(line)
+       && isSpeakerLine(nextLine))return true;
+
+    return false;
+  }
+
+
+  const spokenInterludeRx = /^(?:(?:GESPROKEN\s+)?TEKST\s+TIJDENS\b|DIALOOG\s+TIJDENS\b|GESPROKEN\s+STUK\b|SPREEKTEKST\b)/i;
+  const groupSingerRx = /^(?:ALLEN|ENSEMBLE|KOOR|MANNEN|VROUWEN|BEIDEN|ALLE\s+\d+|\d+\s+MUSKETIERS|HUGENOTEN|KATHOLIEKEN)\b/i;
+
+  function splitSpeakerLine(line){
+    const match=String(line||"").trim().match(/^([^:]{1,50})\s*:\s*(.+)$/);
+    if(!match)return null;
+    return {speaker:match[1].trim(),text:match[2].trim()};
+  }
+
+  function normalizeComparableText(value){
+    return String(value||"")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"")
+      .toLowerCase()
+      .replace(/\([^)]*\)/g," ")
+      .replace(/[^a-z0-9 ]/g," ")
+      .replace(/\s+/g," ")
+      .trim();
+  }
+
+  function similarSpokenText(a,b){
+    const left=normalizeComparableText(a);
+    const right=normalizeComparableText(b);
+    if(!left||!right)return false;
+    if(left===right)return true;
+    if(left.length>=18&&right.length>=18&&(left.includes(right)||right.includes(left)))return true;
+
+    const leftWords=new Set(left.split(" "));
+    const rightWords=new Set(right.split(" "));
+    const overlap=[...leftWords].filter(word=>rightWords.has(word)).length;
+    const union=new Set([...leftWords,...rightWords]).size;
+    return union>0&&(overlap/union)>=0.72;
+  }
+
+  function isSongResumeAfterInterlude(lines,index){
+    const line=String(lines[index]||"").trim();
+    if(!line)return false;
+
+    if(songStartRx.test(line)||songBracketStartRx.test(line)||
+       /^(?:REFREIN|COUPLET|VERSE|CHORUS|BRIDGE)\b/i.test(line)){
+      return true;
+    }
+
+    const current=splitSpeakerLine(line);
+    if(current&&groupSingerRx.test(current.speaker))return true;
+
+    const nextIndex=nextNonEmptyIndex(lines,index,3);
+    const next=nextIndex>=0?splitSpeakerLine(lines[nextIndex]):null;
+
+    // In het script wordt een zangregel soms eerst door één rol en daarna
+    // vrijwel hetzelfde door Ensemble/Allen herhaald. Dan begint het lied weer.
+    if(current&&next&&groupSingerRx.test(next.speaker)&&similarSpokenText(current.text,next.text)){
+      return true;
+    }
+
+    // Herhalende titel-/refreinregel markeert eveneens hervatting.
+    const normalized=normalizeComparableText(line);
+    const repeatedTitles=[
+      "oorlog of geen oorlog",
+      "een voor allen",
+      "parijs parijs",
+      "mannen mannen",
+      "o heer",
+      "nu nu",
+      "ik ben een vrouw"
+    ];
+    return repeatedTitles.some(phrase=>normalized.includes(phrase));
+  }
+
   function filterSongSections(text){
     const source=String(text||"").replace(/\r\n?/g,"\n");
     const input=source.split("\n");
     const output=[];
-    let inSong=false,sections=0,skippedLines=0;
+    let inSong=false;
+    let inSpokenInterlude=false;
+    let sections=0;
+    let skippedLines=0;
+    let skippedSinceStart=0;
+    let interludes=0;
+    const titles=[];
 
-    for(const raw of input){
+    for(let index=0;index<input.length;index++){
+      const raw=input[index];
       const line=raw.trim();
 
-      if(!inSong&&isSongStart(line)){
+      if(!inSong&&isSongStartAt(input,index)){
         inSong=true;
+        inSpokenInterlude=false;
         sections++;
-        if(line)skippedLines++;
+        skippedSinceStart=0;
+        titles.push(line);
+        if(line){
+          skippedLines++;
+          skippedSinceStart++;
+        }
         continue;
       }
 
       if(inSong){
-        if(isSceneOrActHeading(line)){
-          inSong=false;
+        // Expliciete aanwijzingen zoals "Tekst tijdens bovenstaande couplet"
+        // openen een tijdelijk gesproken blok binnen het lied.
+        if(!inSpokenInterlude&&spokenInterludeRx.test(line)){
+          inSpokenInterlude=true;
+          interludes++;
+          if(line)skippedLines++; // de technische aanwijzing zelf niet oefenen
+          continue;
+        }
+
+        if(inSpokenInterlude){
+          if(isSceneOrActHeading(line)){
+            inSong=false;
+            inSpokenInterlude=false;
+            output.push(raw);
+            continue;
+          }
+
+          if(songEndRx.test(line)){
+            inSong=false;
+            inSpokenInterlude=false;
+            if(line)skippedLines++;
+            continue;
+          }
+
+          if(isSongResumeAfterInterlude(input,index)){
+            inSpokenInterlude=false;
+            if(line){
+              skippedLines++;
+              skippedSinceStart++;
+            }
+            continue;
+          }
+
+          // Gewone gesproken tekst binnen het lied blijft behouden.
           output.push(raw);
           continue;
         }
-        if(songEndRx.test(line)){
+
+        if(shouldEndImplicitSong(input,index,skippedSinceStart)){
           inSong=false;
-          if(line)skippedLines++;
+
+          if(isSceneOrActHeading(line)){
+            output.push(raw);
+            continue;
+          }
+
+          if(songEndRx.test(line)){
+            if(line)skippedLines++;
+            continue;
+          }
+
+          output.push(raw);
           continue;
         }
-        if(line)skippedLines++;
+
+        if(line){
+          skippedLines++;
+          skippedSinceStart++;
+        }
         continue;
       }
 
       output.push(raw);
     }
 
-    lastSongFilterInfo={sections,lines:skippedLines};
+    lastSongFilterInfo={sections,lines:skippedLines,titles,interludes};
     return output.join("\n");
   }
 

@@ -227,3 +227,43 @@ Versie 20:
 - gebruikt daarna nog steeds twee tekstextractiemethoden;
 - onderscheidt een laad-/internetfout van een PDF zonder tekst;
 - behoudt fuzzy rolherkenning, afzonderlijke genummerde rollen en het overslaan van liedteksten.
+
+
+## Versie 21: slimme liedtitelherkenning
+
+De app herkent nu ook liedjes zonder het woord `LIED`.
+
+Bekende titels voor het Musketiers-script:
+- NU en NU (reprise)
+- KATHOLIEK EN HUGENOOT
+- PARIJS
+- O HEER
+- OORLOG
+- EEN VOOR ALLEN
+- IK BEN EEN VROUW
+- CONSTANCE
+- MANNEN
+
+Daarnaast herkent de app algemene hoofdlettertitels wanneer:
+- de titel kort is;
+- daarna meerdere rolblokken volgen;
+- er veel doorlopende tekstregels staan;
+- groepen zoals ALLEN, ENSEMBLE, MANNEN of VROUWEN meedoen.
+
+Een lied eindigt bij:
+- een nieuwe scène of akte;
+- een expliciete eindmarkering;
+- een duidelijke toneelaanwijzing gevolgd door gewone dialoog.
+
+Na uploaden toont de app welke liedtitels zijn overgeslagen.
+
+
+## Versie 22 definitief
+
+- Liedteksten worden overgeslagen.
+- Gesproken dialoog die midden in een lied staat, blijft behouden.
+- Markeringen zoals `Tekst tijdens bovenstaande couplet`, `Dialoog tijdens` en `Spreektekst` openen een tijdelijk gesproken blok.
+- Wanneer het refrein of een groepszang opnieuw begint, schakelt de app automatisch terug naar lied-overslaan.
+- PDF-uitlezing gebruikt de in versie 20 herstelde PDF.js-modulelader en twee extractiemethoden.
+- Fuzzy rolherkenning blijft actief.
+- Genummerde rollen zoals Man 1 en Man 2 blijven apart.
