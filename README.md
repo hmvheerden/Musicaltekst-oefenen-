@@ -289,3 +289,11 @@ Na uploaden toont de app welke liedtitels zijn overgeslagen.
   - overige onverwachte schrijfwijzen of rollen.
 - Man 1, Man 2 en Man 3 blijven afzonderlijk.
 - De volledige echte Musketiers-PDF is opnieuw getest.
+
+
+## Versie 25 definitief — uploadfout opgelost
+
+- De ontbrekende functie `escapeHtml` is toegevoegd.
+- Het rollencontrole-overzicht kan nu veilig rolnamen en meldingen tonen.
+- Speciale tekens zoals apostroffen en aanhalingstekens worden correct weergegeven.
+- De PDF-parser, liedfilter, fuzzy rolherkenning en controle van Man 1, Man 2 en Man 3 blijven ongewijzigd.
