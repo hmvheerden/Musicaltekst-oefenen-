@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#3d234f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Musicaltekst Oefenen</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css?v=8">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="brand">Musicaltekst Oefenen</div>
+      <div class="subtitle"><span id="activeScriptLabel">Nog geen script gekozen</span> · <strong>v16</strong></div>
+    </div>
+    <button class="icon-btn" id="themeQuick" aria-label="Thema wisselen">◐</button>
+  </header>
+
+  <main id="app">
+    <section class="page active" data-page="dashboard">
+      <div class="hero card">
+        <p class="eyebrow">Jouw persoonlijke tekstcoach</p>
+        <h1>Leer je musicaltekst stap voor stap</h1>
+        <p>Repeteer je tekst met beoordeling, oefen rustig met twee voorgaande teksten of train extra op moeilijke regels.</p>
+        <div class="mode-choice-grid">
+          <button class="mode-choice primary" data-go="practiceSetup"><strong>Repeteren</strong><small>Bekijk twee voorgaande tekstblokken, overhoor jezelf en kies Goed, Bijna goed of Fout</small></button>
+          <button class="mode-choice secondary" data-go="oefenenSetup"><strong>Oefenen</strong><small>Bekijk twee volledige voorgaande tekstblokken en toon daarna jouw tekst</small></button>
+        </div>
+        <button class="text-link" data-go="scripts">Nieuw script uploaden</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat card"><span id="dashMastered">0%</span><small>teksten beheerst</small></div>
+        <div class="stat card"><span id="dashRemaining">0</span><small>nog oefenen</small></div>
+        <div class="stat card"><span id="dashStreak">0</span><small>oefendagen op rij</small></div>
+        <div class="stat card"><span id="dashDifficult">0</span><small>moeilijke teksten</small></div>
+      </div>
+      <div class="card">
+        <h2>Verdergaan</h2>
+        <div id="continueBox" class="empty">Start eerst een oefensessie.</div>
+      </div>
+      <div class="card">
+        <h2>Laatste sessies</h2>
+        <div id="recentSessions" class="list empty">Nog geen sessies opgeslagen.</div>
+      </div>
+    </section>
+
+    <section class="page" data-page="scripts">
+      <div class="page-head">
+        <div><p class="eyebrow">Bibliotheek</p><h1>Scripts</h1></div>
+        <button class="primary small" id="newScriptBtn">Nieuw script</button>
+      </div>
+      <div id="scriptList" class="list"></div>
+      <div class="card" id="uploadCard">
+        <h2>Script toevoegen</h2>
+        <label>Naam van de musical
+          <input id="scriptTitle" placeholder="Bijvoorbeeld: De Drie Musketiers">
+        </label>
+        <label>Upload PDF, DOCX of TXT
+          <input id="scriptFile" type="file" accept=".pdf,.docx,.txt,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+        </label>
+        <div class="divider"><span>of</span></div>
+        <label>Plak het script
+          <textarea id="scriptPaste" rows="10" placeholder="AKTE 1&#10;SCÈNE 1&#10;ARAMIS: Waar gaan jullie heen?&#10;D'ARTAGNAN: Naar Parijs."></textarea>
+        </label>
+        <div class="notice song-skip-notice">
+          <strong>Liedteksten worden overgeslagen</strong>
+          <p>Herkenbare lied-, zang-, refrein- en coupletsecties worden niet meegenomen in Repeteren, Oefenen en Extra oefenen. Controleer na het uploaden altijd kort of het script goed is herkend.</p>
+        </div>
+        <p class="hint">PDF- en Word-uitlezing gebruikt gratis browserbibliotheken. De verwerking gebeurt op je apparaat.</p>
+        <button class="primary full" id="parseScriptBtn">Script verwerken</button>
+        <div id="parseStatus" class="status hidden"></div>
+      </div>
+    </section>
+
+    <section class="page" data-page="review">
+      <div class="page-head">
+        <div><p class="eyebrow">Controle</p><h1>Script controleren</h1></div>
+        <button class="secondary small" data-go="scripts">Terug</button>
+      </div>
+      <div class="card">
+        <h2>Script controleren</h2>
+        <p class="hint">Controleer of rollen, scènes en tekstregels goed zijn herkend. Rol 1, Rol 2 en Rol 3 kies je pas wanneer je Repeteren, Oefenen of Extra oefenen start.</p>
+        <div class="button-row">
+          <button class="secondary" id="addLineBtn">Regel toevoegen</button>
+          <button class="primary" id="saveReviewBtn">Wijzigingen opslaan</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="filter-row">
+          <input id="reviewSearch" placeholder="Zoek in regels">
+          <select id="reviewSceneFilter"><option value="">Alle scènes</option></select>
+        </div>
+        <div id="reviewLines" class="review-list"></div>
+      </div>
+    </section>
+
+    <section class="page" data-page="practiceSetup">
+      <div class="page-head"><div><p class="eyebrow">Zelf overhoren</p><h1>Repeteren</h1></div></div>
+      <div class="card mode-explanation"><strong>Repeteren</strong><p>Zeg jouw tekst hardop of typ hem. Beoordeel daarna met Goed, Bijna goed of Fout.</p></div>
+      <div class="card form-grid">
+        <label>Script
+          <select id="practiceScript"></select>
+        </label>
+        <div class="role-three-grid">
+          <label>Rol 1
+            <select id="practiceRole1"></select>
+          </label>
+          <label>Rol 2 (optioneel)
+            <select id="practiceRole2"></select>
+          </label>
+          <label>Rol 3 (optioneel)
+            <select id="practiceRole3"></select>
+          </label>
+        </div>
+        <label>Repeteervorm
+          <select id="practiceMode">
+            <option value="speak">Tekst opzeggen</option>
+            <option value="type">Tekst typen</option>
+          </select>
+        </label>
+        <label>Omvang
+          <select id="practiceUnit">
+            <option value="line">Eén tekstregel</option>
+            <option value="block">Volledig tekstblok</option>
+            <option value="scene">Volledige scène</option>
+          </select>
+        </label>
+        <label>Onderdeel
+          <select id="practiceScope">
+            <option value="all">Hele musical</option>
+            <option value="act">Akte</option>
+            <option value="scene">Scène</option>
+            <option value="difficult">Alleen moeilijke teksten</option>
+            <option value="wrong">Alleen eerder fout</option>
+          </select>
+        </label>
+        <label id="scopeValueWrap" class="hidden">Kies onderdeel
+          <select id="practiceScopeValue"></select>
+        </label>
+        <label>Volgorde
+          <select id="practiceOrder">
+            <option value="original">Originele volgorde</option>
+            <option value="random">Willekeurige volgorde</option>
+          </select>
+        </label>
+        <label>Nauwkeurigheid
+          <select id="practiceAccuracy">
+            <option value="normal">Normaal</option>
+            <option value="strict">Streng</option>
+            <option value="lenient">Soepel</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="smartRepeat" checked> Slimme herhaling gebruiken</label>
+        <button class="primary full" id="startPracticeBtn">Repetitie starten</button>
+      </div>
+    </section>
+
+    <section class="page" data-page="practice">
+      <div class="practice-shell">
+        <div class="practice-top">
+          <button class="secondary small" id="stopPracticeBtn">Stoppen</button>
+          <span id="practiceProgress">1 / 1</span>
+          <button class="icon-btn" id="markDifficultBtn" aria-label="Markeer als moeilijk">☆</button>
+        </div>
+        <div class="cue-card">
+          <p class="scene-label" id="practiceScene">Scène</p>
+          <div id="practiceCues" class="cue-stack">
+            <div class="cue-block">De twee voorgaande tekstblokken verschijnen hier.</div>
+          </div>
+        </div>
+        <div id="speakArea">
+          <p class="instruction"><strong>Repeteren:</strong> zeg nu jouw tekst hardop.</p>
+          <button class="primary full large" id="revealAnswerBtn">Toon mijn tekst</button>
+          <div id="spokenAnswer" class="answer-card hidden"></div>
+          <div id="selfGradeButtons" class="grade-grid hidden">
+            <button class="good" data-grade="good">Goed</button>
+            <button class="almost" data-grade="almost">Bijna goed</button>
+            <button class="bad" data-grade="wrong">Fout</button>
+            <button class="secondary" id="retryBtn">Nog een keer</button>
+            <button class="secondary span-2" id="nextLineBtn">Volgende zin</button>
+          </div>
+        </div>
+        <div id="typeArea" class="hidden">
+          <label>Typ jouw tekst
+            <textarea id="typedAnswer" rows="6" autocomplete="off" autocapitalize="sentences"></textarea>
+          </label>
+          <button class="primary full" id="checkTypedBtn">Controleren</button>
+          <div id="typeFeedback" class="feedback hidden"></div>
+          <button class="secondary full hidden" id="typedNextBtn">Volgende zin</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="oefenenSetup">
+      <div class="page-head"><div><p class="eyebrow">Tekst leren</p><h1>Oefenen</h1></div></div>
+      <div class="card mode-explanation"><strong>Oefenen</strong><p>Bekijk de twee volledige tekstblokken direct vóór jouw tekst, zeg jouw tekst en druk daarna op Toon tekst. Er volgt geen beoordeling.</p></div>
+      <div class="card form-grid">
+        <label>Script<select id="learnScript"></select></label>
+        <div class="role-three-grid">
+          <label>Rol 1<select id="learnRole1"></select></label>
+          <label>Rol 2 (optioneel)<select id="learnRole2"></select></label>
+          <label>Rol 3 (optioneel)<select id="learnRole3"></select></label>
+        </div>
+        <label>Onderdeel<select id="learnScope"><option value="all">Hele musical</option><option value="act">Akte</option><option value="scene">Scène</option></select></label>
+        <label id="learnScopeWrap" class="hidden">Kies onderdeel<select id="learnScopeValue"></select></label>
+        <label>Volgorde<select id="learnOrder"><option value="original">Originele volgorde</option><option value="random">Willekeurige volgorde</option></select></label>
+        <button class="primary full" id="startLearnBtn">Oefenen starten</button>
+      </div>
+      <div class="card"><p class="hint">Bij Oefenen zie je de twee volledige tekstblokken direct vóór jouw tekstblok. Je zegt jouw tekst hardop, toont daarna het antwoord en gaat verder. Er is geen beoordeling.</p></div>
+    </section>
+
+    <section class="page" data-page="extraSetup">
+      <div class="page-head"><div><p class="eyebrow">Gericht trainen</p><h1>Extra oefenen</h1></div></div>
+      <div class="card">
+        <p>Repeteer vooral teksten die eerder fout of bijna goed waren, of die je als moeilijk hebt gemarkeerd.</p>
+        <label>Script<select id="extraScript"></select></label>
+        <div class="role-three-grid">
+          <label>Rol 1<select id="extraRole1"></select></label>
+          <label>Rol 2 (optioneel)<select id="extraRole2"></select></label>
+          <label>Rol 3 (optioneel)<select id="extraRole3"></select></label>
+        </div>
+        <label>Repeteervorm<select id="extraMode"><option value="speak">Tekst opzeggen</option><option value="type">Tekst typen</option></select></label>
+        <button class="primary full" id="startExtraBtn">Extra repetitie starten</button>
+      </div>
+    </section>
+
+    <section class="page" data-page="learn">
+      <div class="practice-shell">
+        <div class="practice-top"><button class="secondary small" id="stopLearnBtn">Stoppen</button><span id="learnProgress">1 / 1</span><span></span></div>
+        <div class="cue-card"><p class="scene-label" id="learnScene">Scène</p><div id="learnCues"></div></div>
+        <p class="instruction"><strong>Oefenen:</strong> zeg jouw tekst hardop.</p>
+        <button class="primary full large" id="revealLearnBtn">Toon tekst</button>
+        <div id="learnAnswer" class="answer-card hidden"></div>
+        <button class="secondary full hidden" id="nextLearnBtn">Volgende tekst</button>
+      </div>
+    </section>
+<section class="page" data-page="progress">
+      <div class="page-head"><div><p class="eyebrow">Inzicht</p><h1>Voortgang</h1></div></div>
+      <div class="stats-grid">
+        <div class="stat card"><span id="progressMastered">0%</span><small>beheerst</small></div>
+        <div class="stat card"><span id="progressPracticed">0</span><small>geoefend</small></div>
+        <div class="stat card"><span id="progressMinutes">0</span><small>minuten geoefend</small></div>
+        <div class="stat card"><span id="progressDays">0</span><small>oefendagen</small></div>
+      </div>
+      <div class="card">
+        <h2>Voortgang per scène</h2>
+        <div id="sceneProgress"></div>
+      </div>
+      <div class="card">
+        <h2>Moeilijkste teksten</h2>
+        <div id="difficultLines" class="list empty">Nog onvoldoende gegevens.</div>
+      </div>
+    </section>
+
+    <section class="page" data-page="history">
+      <div class="page-head"><div><p class="eyebrow">Terugkijken</p><h1>Geschiedenis</h1></div></div>
+      <div id="historyList" class="list"></div>
+    </section>
+
+    <section class="page" data-page="settings">
+      <div class="page-head"><div><p class="eyebrow">Voorkeuren</p><h1>Instellingen</h1></div></div>
+      <div class="card form-grid">
+        <label>Thema
+          <select id="settingTheme">
+            <option value="system">Automatisch</option>
+            <option value="light">Licht</option>
+            <option value="dark">Donker</option>
+          </select>
+        </label>
+        <label>Lettergrootte
+          <select id="settingFont">
+            <option value="small">Klein</option>
+            <option value="normal">Normaal</option>
+            <option value="large">Groot</option>
+          </select>
+        </label>
+        <label>Tekst automatisch tonen na
+          <select id="settingAutoReveal">
+            <option value="0">Nooit</option>
+            <option value="5">5 seconden</option>
+            <option value="10">10 seconden</option>
+            <option value="15">15 seconden</option>
+            <option value="30">30 seconden</option>
+          </select>
+        </label>
+        <label>Standaard nauwkeurigheid
+          <select id="settingAccuracy">
+            <option value="normal">Normaal</option>
+            <option value="strict">Streng</option>
+            <option value="lenient">Soepel</option>
+          </select>
+        </label>
+      </div>
+      <div class="card">
+        <h2>Back-up</h2>
+        <div class="button-row">
+          <button class="secondary" id="exportBtn">Gegevens exporteren</button>
+          <label class="file-button">Gegevens importeren<input id="importFile" type="file" accept=".json"></label>
+        </div>
+      </div>
+      <div class="card danger-zone">
+        <h2>Gegevens verwijderen</h2>
+        <button class="danger" id="deleteAllBtn">Alle gegevens verwijderen</button>
+      </div>
+    </section>
+  
+  <div id="legacyCompatibility" hidden aria-hidden="true">
+    <button id="readCueBtn" type="button"></button>
+    <input id="learnReadAloud" type="checkbox">
+    <button id="readLearnCuesBtn" type="button"></button>
+    <input id="settingSound" type="checkbox">
+    <input id="settingVibration" type="checkbox">
+    <select id="recordScript"></select>
+    <select id="recordRole"></select>
+    <select id="recordScene"></select>
+    <input id="recordSearch">
+    <div id="recordLines"></div>
+    <div id="recordingSupport"></div>
+  </div>
+
+</main>
+
+  <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+    <button class="active" data-go="dashboard"><span>⌂</span>Start</button>
+    <button data-go="scripts"><span>▤</span>Scripts</button>
+    <button data-go="practiceSetup"><span>✓</span>Repeteren</button>
+    <button data-go="oefenenSetup"><span>▶</span>Oefenen</button>
+    <button data-go="extraSetup"><span>★</span>Extra</button>
+    <button data-go="settings"><span>⚙</span>Instellingen</button>
+  </nav>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module" id="pdfModule"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+  <script src="parser.js?v=16"></script>
+  <script src="app.js?v=16"></script>
+</body>
+</html>
