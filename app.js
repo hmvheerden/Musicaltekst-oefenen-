@@ -4,8 +4,8 @@ window.addEventListener("error",event=>{
 });
 
 const KEY="musicaltekst-oefenen-v1";
-async function forceVersion22Refresh(){
-  const marker="mto-v22-cache-reset";
+async function forceVersion24Refresh(){
+  const marker="mto-v24-cache-reset";
   if(localStorage.getItem(marker))return;
   localStorage.setItem(marker,"1");
   if("caches" in window){
@@ -14,6 +14,92 @@ async function forceVersion22Refresh(){
   if("serviceWorker" in navigator){
     try{const regs=await navigator.serviceWorker.getRegistrations();for(const reg of regs)await reg.update()}catch{}
   }
+}
+
+
+const EXPECTED_MUSKETEERS_ROLES=[
+  {name:"D'Artagnan",aliases:["D’Artagnan","D Artagnan","Dartagnan"]},
+  {name:"Athos",aliases:[]},
+  {name:"Porthos",aliases:[]},
+  {name:"Aramis",aliases:["Aramius"]},
+  {name:"Constance Bonacieux",aliases:["Constance","Constance B."]},
+  {name:"Milady de Winter",aliases:["Milady","Milady de W."]},
+  {name:"Kardinaal Richelieu",aliases:["Richelieu","Kardinaal"]},
+  {name:"Koningin Anna",aliases:["Anna","Koningin"]},
+  {name:"Koning Lodewijk XIII",aliases:["Lodewijk","Koning Lodewijk","Lod."]},
+  {name:"Rochefort",aliases:[]},
+  {name:"Bootsman",aliases:["Bootsvrouw"]},
+  {name:"Buckingham",aliases:["Lord Buckingham"]},
+  {name:"Dienstbode",aliases:[]},
+  {name:"Vader van D'Artagnan",aliases:["Vader","Vader D'Artagnan"]},
+  {name:"Moeder van D'Artagnan",aliases:["Moeder","Moeder D'Artagnan"]},
+  {name:"Spreekstalmeester",aliases:["Spreekstalmeester 1","Spreekstalmeester 2","Spreekstalmeester 3","Spreekstalmeester 4","Spreekstalmeester 5","Spreekstalmeester 6","Spreekstalmeester 7"]},
+  {name:"Isabel",aliases:[]},
+  {name:"Waardin",aliases:[]},
+  {name:"Man 1",aliases:["Man1","MAN 1"]},
+  {name:"Man 2",aliases:["Man2","MAN 2"]},
+  {name:"Man 3",aliases:["Man3","MAN 3"]},
+  {name:"Madame S",aliases:["Madame S."]},
+  {name:"Madame E",aliases:["Madame E."]},
+  {name:"Gravin",aliases:[]},
+  {name:"Man 1 scène 15",aliases:["Man 1 scene 15"]},
+  {name:"Vrouw 1",aliases:["Vrouw1","VROUW 1"]},
+  {name:"Vrouw 2",aliases:["Vrouw2","VROUW 2"]},
+  {name:"Vrouw 3",aliases:["Vrouw3","VROUW 3"]},
+  {name:"Hugenoot",aliases:[]},
+  {name:"Gardist",aliases:[]},
+  {name:"Bewakers",aliases:["Bewaker"]},
+  {name:"Musketiers",aliases:["3 Musketiers","Drie Musketiers"]},
+  {name:"Garde van de Kardinaal",aliases:["Kardinale Garde","Garde"]},
+  {name:"Hofdames",aliases:["Hofdame"]},
+  {name:"Edelmannen",aliases:["Edelman"]},
+  {name:"Burgers / Marktvolk",aliases:["Burgers","Marktvolk"]},
+  {name:"Gevangenen",aliases:["Gevangene"]},
+  {name:"Zeelieden / Soldaten",aliases:["Zeelieden","Soldaten"]},
+  {name:"Allen",aliases:["ALLEN"]},
+  {name:"Ensemble",aliases:["ENSEMBLE"]},
+  {name:"Mannen",aliases:["MANNEN"]},
+  {name:"Vrouwen",aliases:["VROUWEN"]},
+  {name:"Hugenoten",aliases:["HUGENOTEN"]},
+  {name:"Katholieken",aliases:["KATHOLIEKEN"]},
+  {name:"Beiden",aliases:["BEIDEN","Alle 2"]},
+  {name:"Alle 3",aliases:["Alle drie","ALLE 3"]},
+  {name:"Anna en Lodewijk",aliases:["Anna en Lod.","Anna + Lodewijk"]},
+  {name:"Milady en vrouwen",aliases:["Milady + vrouwen","Milady+vrouwen"]},
+  {name:"Milady en mannen",aliases:["Milady + mannen","Milady+mannen"]}
+];
+
+function roleMatchesExpected(foundRole,expected){
+  const foundId=ScriptParser.roleIdentity(foundRole);
+  return [expected.name,...(expected.aliases||[])]
+    .some(name=>ScriptParser.rolesAreFuzzyMatch(foundRole,name)||foundId===ScriptParser.roleIdentity(name));
+}
+
+function buildRoleAudit(lines){
+  const foundRoles=ScriptParser.roles(lines);
+  const counts=new Map();
+  for(const line of lines){
+    counts.set(line.speaker,(counts.get(line.speaker)||0)+1);
+  }
+
+  const expected=EXPECTED_MUSKETEERS_ROLES.map(role=>{
+    const matches=foundRoles.filter(found=>roleMatchesExpected(found,role));
+    const count=matches.reduce((sum,name)=>sum+(counts.get(name)||0),0);
+    return {...role,matches,count,found:count>0};
+  });
+
+  const matchedFound=new Set(expected.flatMap(item=>item.matches));
+  const extra=foundRoles
+    .filter(role=>!matchedFound.has(role))
+    .map(role=>({name:role,count:counts.get(role)||0}));
+
+  return {
+    expected,
+    extra,
+    missing:expected.filter(item=>!item.found),
+    foundCount:expected.filter(item=>item.found).length,
+    expectedCount:expected.length
+  };
 }
 
 const defaultState={scripts:[],sessions:[],activeScriptId:null,settings:{theme:"system",font:"normal",autoReveal:0,sound:false,vibration:false,accuracy:"normal"},currentSession:null};
@@ -138,6 +224,48 @@ function renderDashboard(){
   $("#recentSessions").innerHTML=state.sessions.slice(-3).reverse().map(sessionHtml).join("")||"Nog geen sessies opgeslagen.";
   $$("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
 }
+
+function renderRoleAudit(script){
+  const card=$("#roleAuditCard");
+  if(!card)return;
+  if(!script?.lines?.length){
+    card.hidden=true;
+    return;
+  }
+
+  const audit=buildRoleAudit(script.lines);
+  script.roleAudit=audit;
+  card.hidden=false;
+
+  $("#roleAuditSummary").innerHTML=`
+    <span class="audit-pill good">${audit.foundCount} van ${audit.expectedCount} bekende rollen gevonden</span>
+    <span class="audit-pill">${script.lines.length} dialoogregels</span>
+    <span class="audit-pill">${ScriptParser.roles(script.lines).length} unieke rollen in het script</span>
+  `;
+
+  $("#roleAuditWarnings").innerHTML=audit.missing.length
+    ? `<div class="warning-box"><strong>Controleer deze niet-gevonden rollen:</strong><p>${audit.missing.map(item=>escapeHtml(item.name)).join(", ")}</p><p class="muted">Een rol kan bewust geen tekst hebben, alleen in zang voorkomen of onder een onverwachte schrijfwijze staan.</p></div>`
+    : `<div class="success-box">Alle bekende rollen met gesproken tekst zijn gevonden.</div>`;
+
+  $("#roleAuditList").innerHTML=audit.expected.map(item=>`
+    <div class="role-audit-row ${item.found?"found":"missing"}">
+      <span>${item.found?"✓":"!"}</span>
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${item.count} tekstregel${item.count===1?"":"s"}</span>
+      <small>${item.matches.length?`Gevonden als: ${item.matches.map(escapeHtml).join(", ")}`:"Niet gevonden"}</small>
+    </div>
+  `).join("");
+
+  $("#roleAuditExtra").innerHTML=audit.extra.length
+    ? audit.extra.map(item=>`
+        <div class="role-audit-row extra">
+          <span>+</span><strong>${escapeHtml(item.name)}</strong>
+          <span>${item.count} tekstregel${item.count===1?"":"s"}</span>
+        </div>
+      `).join("")
+    : `<p class="muted">Geen overige rollen gevonden.</p>`;
+}
+
 function renderScripts(){
   $("#scriptList").innerHTML=state.scripts.map(s=>`<div class="list-item"><div><h3>${esc(s.title)}</h3><div class="meta">${s.lines.length} regels · ${ScriptParser.roles(s.lines).length} rollen${s.songFilter?.sections?` · ${s.songFilter.sections} liedsectie${s.songFilter.sections===1?"":"s"} overgeslagen`:""}</div></div><div><button class="secondary small" onclick="openReview('${s.id}')">Open</button> <button class="danger small" onclick="deleteScript('${s.id}')">Verwijder</button></div></div>`).join("")||`<div class="empty card">Nog geen scripts toegevoegd.</div>`;
 }
@@ -158,9 +286,11 @@ $("#parseScriptBtn").onclick=async()=>{
       throw new Error(`De PDF is wel gelezen (${text.length} tekens), maar er zijn geen duidelijke dialoogregels gevonden buiten de liedteksten. Controleer of rollen en tekstregels herkenbaar zijn opgemaakt.`);
     }
     const script={id:crypto.randomUUID(),title,created:nowIso(),lines,role:"",roles:[],aliases:[],customRoles:[],songFilter};
+    script.roleAudit=buildRoleAudit(lines);
     state.scripts.push(script);state.activeScriptId=script.id;save();
     $("#scriptTitle").value="";$("#scriptPaste").value="";$("#scriptFile").value="";
     status.textContent=`Bestand gelezen: ${text.length} tekens. ${lines.length} tekstregels gevonden.${songFilter.sections?` ${songFilter.sections} liedsectie${songFilter.sections===1?"":"s"} overgeslagen${songFilter.titles?.length?`: ${songFilter.titles.join(", ")}`:""}.${songFilter.interludes?` ${songFilter.interludes} gesproken tussenstuk${songFilter.interludes===1?"":"ken"} behouden.`:""}`:" Geen herkenbare liedsecties gevonden."}`;
+    renderRoleAudit(script);
     openReview(script.id);
   }catch(e){status.textContent=e.message}
 };
@@ -588,11 +718,11 @@ window.deleteSession=id=>{if(confirm("Deze sessie verwijderen?")){state.sessions
 function calcStreak(){const days=[...new Set(state.sessions.map(x=>x.started.slice(0,10)))].sort().reverse();let n=0,d=new Date();for(const day of days){const want=d.toISOString().slice(0,10);if(day===want){n++;d.setDate(d.getDate()-1)}else if(n===0){d.setDate(d.getDate()-1);if(day===d.toISOString().slice(0,10)){n++;d.setDate(d.getDate()-1)}else break}else break}return n}
 function formatDate(x){return new Intl.DateTimeFormat("nl-NL",{dateStyle:"medium",timeStyle:"short"}).format(new Date(x))}
 $("#exportBtn").onclick=()=>download("musicaltekst-oefenen-backup.json",JSON.stringify(state,null,2),"application/json");
-$("#importFile").onchange=async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!data.scripts||!data.settings)throw Error();state={...defaultState,...data};save();forceVersion22Refresh();ensureDataShape();applySettings();renderDashboard();toast("Back-up geïmporteerd")}catch{toast("Ongeldig back-upbestand")}};
+$("#importFile").onchange=async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!data.scripts||!data.settings)throw Error();state={...defaultState,...data};save();forceVersion24Refresh();ensureDataShape();applySettings();renderDashboard();toast("Back-up geïmporteerd")}catch{toast("Ongeldig back-upbestand")}};
 function download(name,content,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
-$("#deleteAllBtn").onclick=async()=>{if(confirm("Alle scripts, voortgang en instellingen definitief verwijderen?")){localStorage.removeItem(KEY);try{await clearRecordings()}catch{}state=structuredClone(defaultState);forceVersion22Refresh();ensureDataShape();applySettings();renderDashboard();toast("Alle gegevens verwijderd")}};
+$("#deleteAllBtn").onclick=async()=>{if(confirm("Alle scripts, voortgang en instellingen definitief verwijderen?")){localStorage.removeItem(KEY);try{await clearRecordings()}catch{}state=structuredClone(defaultState);forceVersion24Refresh();ensureDataShape();applySettings();renderDashboard();toast("Alle gegevens verwijderd")}};
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("service-worker.js"));
-forceVersion22Refresh();ensureDataShape();applySettings();renderDashboard();
+forceVersion24Refresh();ensureDataShape();applySettings();renderDashboard();
 $("#nextLearnBtn").onclick=()=>{
   learn.index++;
   if(learn.index>=learn.queue.length){

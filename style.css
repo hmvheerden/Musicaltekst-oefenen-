@@ -76,3 +76,17 @@ label{display:block;font-weight:720;margin-bottom:14px}input,textarea,select{dis
   background:var(--surface2);
 }
 .song-skip-notice p{margin:.4rem 0 0;color:var(--muted);line-height:1.45}
+
+.role-audit-card{margin-top:16px}
+.audit-summary{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.audit-pill{display:inline-flex;padding:7px 10px;border-radius:999px;background:var(--surface2);font-size:.86rem}
+.audit-pill.good{font-weight:700}
+.audit-warnings{margin:12px 0}
+.warning-box,.success-box{padding:12px 14px;border-radius:12px;line-height:1.45}
+.warning-box{background:rgba(183,121,31,.12);border:1px solid rgba(183,121,31,.35)}
+.success-box{background:rgba(38,139,88,.12);border:1px solid rgba(38,139,88,.35)}
+.role-audit-list{display:grid;gap:7px;margin-top:10px}
+.role-audit-row{display:grid;grid-template-columns:24px minmax(130px,1fr) auto;gap:8px;align-items:center;padding:9px 10px;border:1px solid var(--border);border-radius:10px}
+.role-audit-row small{grid-column:2/-1;color:var(--muted)}
+.role-audit-row.missing{border-style:dashed}
+.role-audit-row.extra{grid-template-columns:24px minmax(130px,1fr) auto}

@@ -267,3 +267,25 @@ Na uploaden toont de app welke liedtitels zijn overgeslagen.
 - PDF-uitlezing gebruikt de in versie 20 herstelde PDF.js-modulelader en twee extractiemethoden.
 - Fuzzy rolherkenning blijft actief.
 - Genummerde rollen zoals Man 1 en Man 2 blijven apart.
+
+
+## Versie 23 definitief — Man 1, Man 2 en Man 3 hersteld
+
+- Meerregelige toneelaanwijzingen beëindigen een lied direct wanneer daarna roltekst volgt.
+- Man 1, Man 2 en Man 3 blijven daardoor alle drie behouden.
+- Genummerde rollen blijven altijd afzonderlijk.
+- Varianten zoals Man1, MAN 1 en Man 1 worden alleen binnen nummer 1 gecombineerd en weergegeven als `Man 1`.
+- De volledige echte PDF is getest met verplichte controles op alle drie de rollen.
+
+
+## Versie 24 definitief — rollencontrole
+
+- De app bevat een interne lijst met alleen de bekende rolnamen uit de aangeleverde rolverdeling.
+- Namen van spelers en de persoonlijke rolverdeling zijn niet in de app opgenomen.
+- Na het uploaden verschijnt een controleoverzicht:
+  - gevonden bekende rollen;
+  - aantal tekstregels per rol;
+  - ontbrekende bekende rollen;
+  - overige onverwachte schrijfwijzen of rollen.
+- Man 1, Man 2 en Man 3 blijven afzonderlijk.
+- De volledige echte Musketiers-PDF is opnieuw getest.

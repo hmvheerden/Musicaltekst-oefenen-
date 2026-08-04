@@ -123,21 +123,50 @@ window.ScriptParser = (() => {
     return -1;
   }
 
-  function shouldEndImplicitSong(lines,index,skippedSinceStart){
-    if(skippedSinceStart<6)return false;
 
+  function isStrongStageDirectionStart(line){
+    const value=String(line||"").trim();
+    if(!value||isSpeakerLine(value)||isSceneOrActHeading(value))return false;
+
+    if(/^(?:SCENEWISSEL|SCÈNEWISSEL|SCENE WISSEL|LOCATIE|DECOR|DECORWISSEL|DECORWISSELING|LICHT|INSTRUMENTAAL|UNDERSCORE|BLACK-?OUT|FADE|PAUZE|GEVECHT)\b/i.test(value)){
+      return true;
+    }
+
+    const startsLikeSubject=/^[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ’' .+\-&]{1,70}\b/u.test(value);
+    const hasAction=/\b(?:komt|komen|gaat|gaan|loopt|lopen|rent|rennen|botst|valt|vallen|staat|staan|zit|zitten|kijkt|kijken|pakt|pakken|geeft|geven|verschijnt|verschijnen|verdwijnt|verdwijnen|blijft|blijven|draait|draaien|slaat|slaan|heft|heffen|duelleren|vechten|maakt|maken|ziet|zien|af|op)\b/i.test(value);
+
+    return startsLikeSubject&&hasAction;
+  }
+
+  function nextSpeakerWithin(lines,index,maxLines=5){
+    let checked=0;
+    for(let i=index+1;i<lines.length&&checked<maxLines;i++){
+      const value=String(lines[i]||"").trim();
+      if(!value)continue;
+      checked++;
+      if(isSceneOrActHeading(value))return false;
+      if(isSpeakerLine(value))return true;
+    }
+    return false;
+  }
+
+  function shouldEndImplicitSong(lines,index,skippedSinceStart){
     const line=lines[index].trim();
     if(!line)return false;
 
     if(isSceneOrActHeading(line)||songEndRx.test(line))return true;
 
+    // Sterke, meerregelige toneelaanwijzingen gevolgd door roltekst beëindigen
+    // het lied meteen. Dit is essentieel voor Man 1, Man 2 en Man 3 na NU.
+    if(isStrongStageDirectionStart(line)&&nextSpeakerWithin(lines,index,5))return true;
+
+    if(skippedSinceStart<4)return false;
+
     const nextIndex=nextNonEmptyIndex(lines,index,3);
     const nextLine=nextIndex>=0?lines[nextIndex].trim():"";
 
-    // Een toneelaanwijzing gevolgd door gewone dialoog markeert meestal het einde.
     if(looksLikeStageDirection(line)&&isSpeakerLine(nextLine))return true;
 
-    // Ook een instrumentale/toneelovergang gevolgd door dialoog beëindigt het lied.
     if(/^(?:INSTRUMENTAAL|UNDERSCORE|DECORWISSEL|DECORWISSELING|FADE|BLACK-?OUT)\b/i.test(line)
        && isSpeakerLine(nextLine))return true;
 
@@ -396,6 +425,23 @@ window.ScriptParser = (() => {
   function chooseCanonicalRole(names){
     const cleaned=[...new Set(names.map(name=>String(name||"").trim()).filter(Boolean))];
     if(!cleaned.length)return "";
+
+    const numbered=cleaned.map(name=>({name,parts:numberedRoleParts(name)})).filter(item=>item.parts);
+    if(numbered.length===cleaned.length){
+      const preferred=numbered.sort((a,b)=>{
+        const score=name=>{
+          let points=0;
+          if(/\s+\d+$/.test(name))points+=4;
+          if(/[a-z]/.test(name)&&/[A-Z]/.test(name))points+=3;
+          if(name===name.toUpperCase())points-=2;
+          return points;
+        };
+        return score(b.name)-score(a.name)||a.name.length-b.name.length;
+      })[0];
+      const rawBase=preferred.name.replace(/\s*\d+\s*$/,"").trim();
+      const base=rawBase?rawBase.charAt(0).toUpperCase()+rawBase.slice(1).toLowerCase():preferred.parts.base;
+      return `${base} ${preferred.parts.number}`;
+    }
 
     return cleaned.sort((a,b)=>{
       const score=name=>{
