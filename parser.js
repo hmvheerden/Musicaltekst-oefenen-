@@ -107,24 +107,166 @@ window.ScriptParser = (() => {
     return out;
   }
 
+
+  function normalizeRoleForMatch(value){
+    return String(value||"")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"")
+      .replace(/[’‘`´]/g,"'")
+      .replace(/[.\-–—_]/g," ")
+      .replace(/\s+/g," ")
+      .trim()
+      .toLowerCase();
+  }
+
+  function roleIdentity(value){
+    const normalized=normalizeRoleForMatch(value);
+
+    // Genummerde rollen blijven altijd afzonderlijk.
+    // Voorbeelden: MAN 1, MAN 2, MAN 3, STEM 1, STEM 2.
+    const numbered=normalized.match(/^(.*?)(?:\s*)(\d+)$/);
+    if(numbered){
+      const base=numbered[1].replace(/[^a-z0-9]/g,"");
+      return `${base}#${numbered[2]}`;
+    }
+
+    // Niet-genummerde rollen worden gecombineerd wanneer alleen
+    // hoofdletters, accenten, spaties, apostroffen of kleine leestekens verschillen.
+    return normalized.replace(/[^a-z0-9]/g,"");
+  }
+
+  function chooseCanonicalRole(names){
+    const cleaned=[...new Set(names.map(name=>String(name||"").trim()).filter(Boolean))];
+    if(!cleaned.length)return "";
+
+    return cleaned.sort((a,b)=>{
+      const score=name=>{
+        let points=0;
+        if(/[a-z]/.test(name)&&/[A-Z]/.test(name))points+=5;
+        if(/['’]/.test(name))points+=2;
+        if(name===name.toUpperCase())points-=3;
+        return points;
+      };
+      return score(b)-score(a)||a.length-b.length||a.localeCompare(b,"nl");
+    })[0];
+  }
+
+  function levenshteinDistance(a,b){
+    const left=String(a||"");
+    const right=String(b||"");
+    const rows=left.length+1;
+    const cols=right.length+1;
+    const matrix=Array.from({length:rows},()=>Array(cols).fill(0));
+
+    for(let i=0;i<rows;i++)matrix[i][0]=i;
+    for(let j=0;j<cols;j++)matrix[0][j]=j;
+
+    for(let i=1;i<rows;i++){
+      for(let j=1;j<cols;j++){
+        const cost=left[i-1]===right[j-1]?0:1;
+        matrix[i][j]=Math.min(
+          matrix[i-1][j]+1,
+          matrix[i][j-1]+1,
+          matrix[i-1][j-1]+cost
+        );
+      }
+    }
+    return matrix[left.length][right.length];
+  }
+
+  function numberedRoleParts(value){
+    const normalized=normalizeRoleForMatch(value);
+    const match=normalized.match(/^(.*?)(?:\s*)(\d+)$/);
+    if(!match)return null;
+    return {
+      base:match[1].replace(/[^a-z0-9]/g,""),
+      number:match[2]
+    };
+  }
+
+  function rolesAreFuzzyMatch(a,b){
+    const numberedA=numberedRoleParts(a);
+    const numberedB=numberedRoleParts(b);
+
+    // Zodra één van beide namen een nummer heeft, mag alleen exact dezelfde
+    // basis én exact hetzelfde nummer worden gecombineerd.
+    if(numberedA||numberedB){
+      return Boolean(
+        numberedA&&numberedB&&
+        numberedA.base===numberedB.base&&
+        numberedA.number===numberedB.number
+      );
+    }
+
+    const left=roleIdentity(a);
+    const right=roleIdentity(b);
+    if(!left||!right)return false;
+    if(left===right)return true;
+
+    const maxLength=Math.max(left.length,right.length);
+    const minLength=Math.min(left.length,right.length);
+
+    // Bij korte namen is fuzzy matching te riskant.
+    if(minLength<5)return false;
+
+    const distance=levenshteinDistance(left,right);
+    const allowedDistance=maxLength>=9?2:1;
+    const similarity=1-(distance/maxLength);
+
+    return distance<=allowedDistance&&similarity>=0.80;
+  }
+
+  function groupRoles(lines){
+    const groups=[];
+
+    for(const line of lines||[]){
+      const speaker=String(line.speaker||"").trim();
+      if(!speaker)continue;
+
+      let group=groups.find(existing=>
+        existing.variants.some(variant=>rolesAreFuzzyMatch(variant,speaker))
+      );
+
+      if(!group){
+        group={variants:[]};
+        groups.push(group);
+      }
+
+      if(!group.variants.includes(speaker))group.variants.push(speaker);
+    }
+
+    return groups.map(group=>({
+      key:roleIdentity(chooseCanonicalRole(group.variants)),
+      canonical:chooseCanonicalRole(group.variants),
+      variants:[...group.variants]
+    }));
+  }
+
+  function canonicalizeRoleNames(lines){
+    const groups=groupRoles(lines);
+    const canonicalByVariant=new Map();
+
+    for(const group of groups){
+      for(const variant of group.variants){
+        canonicalByVariant.set(roleIdentity(variant),group.canonical);
+      }
+    }
+
+    return (lines||[]).map(line=>({
+      ...line,
+      originalSpeaker:line.originalSpeaker||line.speaker,
+      speaker:canonicalByVariant.get(roleIdentity(line.speaker))||line.speaker
+    }));
+  }
+
   function parse(text){
     const filtered=filterSongSections(text);
     const normal=parseByLines(filtered);
-    if(normal.length>=3)return normal;
-    return parseLoose(filtered);
+    const parsed=normal.length>=3?normal:parseLoose(filtered);
+    return canonicalizeRoleNames(parsed);
   }
-  function roles(lines){return [...new Set(lines.map(l=>l.speaker).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"nl"))}
-
-  function pdfItemsToLines(items){
-    const rows=[];
-    for(const item of items){
-      const text=String(item.str||"").trim();if(!text)continue;
-      const x=item.transform?.[4]??0,y=item.transform?.[5]??0;
-      let row=rows.find(r=>Math.abs(r.y-y)<=4);
-      if(!row){row={y,parts:[]};rows.push(row)}
-      row.parts.push({x,text});
-    }
-    return rows.sort((a,b)=>b.y-a.y).map(r=>r.parts.sort((a,b)=>a.x-b.x).map(p=>p.text).join(" ").replace(/\s+/g," ").trim()).filter(Boolean).join("\n");
+  function roles(lines){
+    return groupRoles(lines).map(group=>group.canonical).sort((a,b)=>a.localeCompare(b,"nl"));
   }
   async function extractFile(file){
     const ext=file.name.split(".").pop().toLowerCase();
@@ -145,5 +287,5 @@ window.ScriptParser = (() => {
     throw new Error("Dit bestandstype wordt niet ondersteund.");
   }
   function getLastSongFilterInfo(){return {...lastSongFilterInfo}}
-  return {parse,roles,extractFile,filterSongSections,getLastSongFilterInfo};
+  return {parse,roles,extractFile,filterSongSections,getLastSongFilterInfo,normalizeRoleForMatch,roleIdentity,levenshteinDistance,rolesAreFuzzyMatch,groupRoles,canonicalizeRoleNames};
 })();

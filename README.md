@@ -163,3 +163,41 @@ Opnames worden lokaal in IndexedDB opgeslagen en worden niet naar GitHub of een 
 - Een liedsectie eindigt bij een nieuwe akte/scène of een duidelijke eindmarkering, zoals EINDE LIED of MUZIEK STOPT.
 - Op de uploadpagina staat duidelijk dat liedteksten niet in de overhoringen worden meegenomen.
 - Na verwerking toont de app hoeveel liedsecties zijn overgeslagen.
+
+
+## Versie 17: bijna identieke rolnamen samenvoegen
+
+De app combineert nu schrijfvarianten van dezelfde rol.
+
+Voorbeelden die één rol worden:
+- `Aramis`, `ARAMIS` en `aramis`
+- `D'Artagnan`, `D Artagnan`, `D ' Artagnan` en `D’ARTAGNAN`
+- verschillen in hoofdletters, accenten, spaties, apostroffen, punten en streepjes
+
+Genummerde rollen blijven apart:
+- `Man 1`, `Man 2`, `Man 3`
+- `Stem 1`, `Stem 2`
+- `Soldaat 1`, `Soldaat 2`
+
+De app kiest één nette schrijfwijze als zichtbare naam en koppelt alle teksten van de varianten aan die rol.
+
+
+## Versie 18: fuzzy rolherkenning
+
+Kleine spelfouten in rolnamen worden nu automatisch gecombineerd.
+
+Voorbeelden:
+- `Aramis`, `ARAMIS`, `aramis` en `Aramius`
+- `D'Artagnan`, `D Artagnan`, `D’Artagnan` en kleine typefouten
+
+De herkenning blijft voorzichtig:
+- korte duidelijk verschillende namen worden niet gecombineerd;
+- bij gewone namen is meestal maximaal één teken verschil toegestaan;
+- bij langere namen zijn maximaal twee kleine verschillen toegestaan.
+
+Genummerde rollen blijven altijd afzonderlijk:
+- `Man 1`, `Man 2`, `Man 3`
+- `Soldaat 1`, `Soldaat 2`
+- `Stem 1`, `Stem 2`
+
+Alleen dezelfde genummerde rol met andere hoofdletters, zoals `MAN 1` en `Man 1`, wordt gecombineerd.

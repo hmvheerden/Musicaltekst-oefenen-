@@ -4,8 +4,8 @@ window.addEventListener("error",event=>{
 });
 
 const KEY="musicaltekst-oefenen-v1";
-async function forceVersion16Refresh(){
-  const marker="mto-v16-cache-reset";
+async function forceVersion18Refresh(){
+  const marker="mto-v18-cache-reset";
   if(localStorage.getItem(marker))return;
   localStorage.setItem(marker,"1");
   if("caches" in window){
@@ -78,7 +78,7 @@ function ensureDataShape(){
     if(!script.roles.length&&script.role)script.roles=[script.role];
     script.roles=[...new Set([...script.roles,...script.aliases].map(x=>String(x).trim()).filter(Boolean))];
     script.customRoles=Array.isArray(script.customRoles)?script.customRoles:[];
-    script.lines=(script.lines||[]).map(line=>{
+    script.lines=ScriptParser.canonicalizeRoleNames((script.lines||[]).map(line=>{
       line.id=line.id||crypto.randomUUID();
       line.difficult=!!line.difficult;
       line.stats={...emptyStats(),...(line.stats||{})};
@@ -87,7 +87,7 @@ function ensureDataShape(){
         line.stats[key]=Number.isFinite(value)?value:0;
       }
       return line;
-    });
+    }));
     return script;
   });
   state.sessions=Array.isArray(state.sessions)?state.sessions:[];
@@ -187,11 +187,7 @@ $("#saveReviewBtn").onclick=()=>{save();toast("Wijzigingen opgeslagen")};
 $("#addLineBtn").onclick=()=>{const s=state.scripts.find(x=>x.id===currentReviewId);const last=s.lines.at(-1)||{};s.lines.push({id:crypto.randomUUID(),act:last.act||"Akte 1",scene:last.scene||"Scène 1",speaker:s.role||"ROL",text:"Nieuwe tekstregel",difficult:false,stats:{attempts:0,good:0,almost:0,wrong:0,last:null,streak:0,nextDue:0}});save();renderReviewLines()};
 
 function normalizedRoleName(value){
-  return String(value||"")
-    .normalize("NFC")
-    .replace(/[’‘`]/g,"'")
-    .replace(/\s+/g," ")
-    .trim();
+  return ScriptParser.roleIdentity(value);
 }
 function selectedRoleNames(script){
   const values=[
@@ -207,11 +203,17 @@ function isMine(script,line){
 function targetLines(s){return s.lines.filter(l=>isMine(s,l))}
 
 function getRoleOptions(script){
-  return [...new Set([
+  const raw=[
     ...ScriptParser.roles(script?.lines||[]),
     ...(script?.customRoles||[]),
-    "ALLEN","Allen","MANNEN","Mannen","VROUWEN","Vrouwen","ENSEMBLE","Ensemble","KOOR","Koor"
-  ])].sort((a,b)=>a.localeCompare(b,"nl"));
+    "ALLEN","MANNEN","VROUWEN","ENSEMBLE","KOOR"
+  ];
+  const unique=new Map();
+  for(const role of raw){
+    const key=ScriptParser.roleIdentity(role);
+    if(!unique.has(key))unique.set(key,role);
+  }
+  return [...unique.values()].sort((a,b)=>a.localeCompare(b,"nl"));
 }
 function fillThreeRoleSelects(prefix,script){
   if(!script)return;
@@ -581,11 +583,11 @@ window.deleteSession=id=>{if(confirm("Deze sessie verwijderen?")){state.sessions
 function calcStreak(){const days=[...new Set(state.sessions.map(x=>x.started.slice(0,10)))].sort().reverse();let n=0,d=new Date();for(const day of days){const want=d.toISOString().slice(0,10);if(day===want){n++;d.setDate(d.getDate()-1)}else if(n===0){d.setDate(d.getDate()-1);if(day===d.toISOString().slice(0,10)){n++;d.setDate(d.getDate()-1)}else break}else break}return n}
 function formatDate(x){return new Intl.DateTimeFormat("nl-NL",{dateStyle:"medium",timeStyle:"short"}).format(new Date(x))}
 $("#exportBtn").onclick=()=>download("musicaltekst-oefenen-backup.json",JSON.stringify(state,null,2),"application/json");
-$("#importFile").onchange=async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!data.scripts||!data.settings)throw Error();state={...defaultState,...data};save();forceVersion16Refresh();ensureDataShape();applySettings();renderDashboard();toast("Back-up geïmporteerd")}catch{toast("Ongeldig back-upbestand")}};
+$("#importFile").onchange=async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!data.scripts||!data.settings)throw Error();state={...defaultState,...data};save();forceVersion18Refresh();ensureDataShape();applySettings();renderDashboard();toast("Back-up geïmporteerd")}catch{toast("Ongeldig back-upbestand")}};
 function download(name,content,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
-$("#deleteAllBtn").onclick=async()=>{if(confirm("Alle scripts, voortgang en instellingen definitief verwijderen?")){localStorage.removeItem(KEY);try{await clearRecordings()}catch{}state=structuredClone(defaultState);forceVersion16Refresh();ensureDataShape();applySettings();renderDashboard();toast("Alle gegevens verwijderd")}};
+$("#deleteAllBtn").onclick=async()=>{if(confirm("Alle scripts, voortgang en instellingen definitief verwijderen?")){localStorage.removeItem(KEY);try{await clearRecordings()}catch{}state=structuredClone(defaultState);forceVersion18Refresh();ensureDataShape();applySettings();renderDashboard();toast("Alle gegevens verwijderd")}};
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("service-worker.js"));
-forceVersion16Refresh();ensureDataShape();applySettings();renderDashboard();
+forceVersion18Refresh();ensureDataShape();applySettings();renderDashboard();
 $("#nextLearnBtn").onclick=()=>{
   learn.index++;
   if(learn.index>=learn.queue.length){
