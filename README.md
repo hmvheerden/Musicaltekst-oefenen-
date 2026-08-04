@@ -201,3 +201,12 @@ Genummerde rollen blijven altijd afzonderlijk:
 - `Stem 1`, `Stem 2`
 
 Alleen dezelfde genummerde rol met andere hoofdletters, zoals `MAN 1` en `Man 1`, wordt gecombineerd.
+
+
+## Versie 19: PDF-uitlezing hersteld
+
+- PDF's worden eerst gelezen met regelreconstructie op basis van tekstposities.
+- Bij onvoldoende resultaat volgt automatisch een tweede, eenvoudigere leesmethode.
+- Duidelijke meldingen voor gescande, beveiligde of ongeldige PDF's.
+- De app maakt onderscheid tussen een PDF die niet gelezen kon worden en een PDF die wel tekst bevat maar geen herkenbare dialoog.
+- Fuzzy rolherkenning en het overslaan van liedteksten blijven behouden.

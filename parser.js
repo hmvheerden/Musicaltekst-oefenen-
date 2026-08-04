@@ -268,23 +268,138 @@ window.ScriptParser = (() => {
   function roles(lines){
     return groupRoles(lines).map(group=>group.canonical).sort((a,b)=>a.localeCompare(b,"nl"));
   }
+  async function extractPdfWithPdfJs(file){
+    if(typeof pdfjsLib==="undefined")throw new Error("De PDF-bibliotheek is niet geladen.");
+    const buffer=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buffer,disableWorker:true}).promise;
+    const pages=[];
+
+    for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+      const page=await pdf.getPage(pageNumber);
+      const content=await page.getTextContent({
+        normalizeWhitespace:true,
+        disableCombineTextItems:false
+      });
+
+      const items=(content.items||[])
+        .filter(item=>item&&typeof item.str==="string")
+        .map(item=>({
+          text:item.str,
+          x:Number(item.transform?.[4]||0),
+          y:Number(item.transform?.[5]||0)
+        }))
+        .filter(item=>item.text.trim());
+
+      items.sort((a,b)=>{
+        const yDiff=b.y-a.y;
+        return Math.abs(yDiff)>2?yDiff:a.x-b.x;
+      });
+
+      const lines=[];
+      for(const item of items){
+        let line=lines.find(existing=>Math.abs(existing.y-item.y)<=2.5);
+        if(!line){
+          line={y:item.y,items:[]};
+          lines.push(line);
+        }
+        line.items.push(item);
+      }
+
+      pages.push(
+        lines
+          .sort((a,b)=>b.y-a.y)
+          .map(line=>line.items
+            .sort((a,b)=>a.x-b.x)
+            .map(item=>item.text)
+            .join(" ")
+            .replace(/\s+/g," ")
+            .trim()
+          )
+          .filter(Boolean)
+          .join("\n")
+      );
+    }
+
+    return pages.join("\n\n").trim();
+  }
+
+  async function extractPdfFallback(file){
+    if(typeof pdfjsLib==="undefined")throw new Error("De PDF-bibliotheek is niet geladen.");
+    const buffer=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buffer,disableWorker:true}).promise;
+    const pages=[];
+
+    for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+      const page=await pdf.getPage(pageNumber);
+      const content=await page.getTextContent();
+      let pageText="";
+      let lastY=null;
+
+      for(const item of content.items||[]){
+        const text=String(item.str||"").trim();
+        if(!text)continue;
+        const y=Number(item.transform?.[5]||0);
+        if(lastY!==null&&Math.abs(lastY-y)>4)pageText+="\n";
+        else if(pageText&&!pageText.endsWith("\n"))pageText+=" ";
+        pageText+=text;
+        lastY=y;
+      }
+
+      pages.push(
+        pageText
+          .replace(/[ \t]+\n/g,"\n")
+          .replace(/\n{3,}/g,"\n\n")
+          .trim()
+      );
+    }
+
+    return pages.join("\n\n").trim();
+  }
+
+  function explainPdfFailure(error,text){
+    const message=String(error?.message||error||"").toLowerCase();
+    if(message.includes("password"))return "Deze PDF is beveiligd met een wachtwoord.";
+    if(message.includes("invalid pdf"))return "Dit bestand lijkt geen geldige PDF te zijn.";
+    if(message.includes("missing pdf"))return "De PDF kon niet volledig worden geladen.";
+    if(!text||text.trim().length<20)return "Deze PDF bevat waarschijnlijk alleen afbeeldingen of gescande pagina's zonder leesbare tekst.";
+    return "De tekst uit de PDF kon niet goed worden verwerkt.";
+  }
+
   async function extractFile(file){
-    const ext=file.name.split(".").pop().toLowerCase();
-    if(ext==="txt")return await file.text();
-    if(ext==="docx"){
-      if(!window.mammoth)throw new Error("De Word-lezer kon niet worden geladen. Controleer internet en probeer opnieuw.");
-      const out=await window.mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});return out.value;
+    const name=String(file?.name||"").toLowerCase();
+    const type=String(file?.type||"").toLowerCase();
+
+    if(name.endsWith(".txt")||type.startsWith("text/")){
+      return await file.text();
     }
-    if(ext==="pdf"){
+
+    if(name.endsWith(".docx")){
+      if(typeof mammoth==="undefined")throw new Error("De Word-bibliotheek is niet geladen.");
+      const result=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});
+      return String(result.value||"").trim();
+    }
+
+    if(name.endsWith(".pdf")||type==="application/pdf"){
+      let firstError=null;
+      let firstText="";
+
       try{
-        const pdfjs=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs");
-        pdfjs.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
-        const pdf=await pdfjs.getDocument({data:await file.arrayBuffer()}).promise;let text="";
-        for(let n=1;n<=pdf.numPages;n++){const page=await pdf.getPage(n),content=await page.getTextContent({normalizeWhitespace:true});text+=pdfItemsToLines(content.items)+"\n\n"}
-        return text;
-      }catch(e){console.error(e);throw new Error("De PDF kon niet worden gelezen. Probeer de PDF opnieuw of plak de tekst.")}
+        firstText=await extractPdfWithPdfJs(file);
+        if(firstText&&firstText.trim().length>=20)return firstText;
+      }catch(error){
+        firstError=error;
+      }
+
+      try{
+        const fallbackText=await extractPdfFallback(file);
+        if(fallbackText&&fallbackText.trim().length>=20)return fallbackText;
+        throw new Error(explainPdfFailure(firstError,fallbackText||firstText));
+      }catch(error){
+        throw new Error(explainPdfFailure(error,firstText));
+      }
     }
-    throw new Error("Dit bestandstype wordt niet ondersteund.");
+
+    throw new Error("Dit bestandstype wordt niet ondersteund. Gebruik PDF, Word (.docx) of tekst (.txt).");
   }
   function getLastSongFilterInfo(){return {...lastSongFilterInfo}}
   return {parse,roles,extractFile,filterSongSections,getLastSongFilterInfo,normalizeRoleForMatch,roleIdentity,levenshteinDistance,rolesAreFuzzyMatch,groupRoles,canonicalizeRoleNames};
