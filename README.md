@@ -210,3 +210,20 @@ Alleen dezelfde genummerde rol met andere hoofdletters, zoals `MAN 1` en `Man 1`
 - Duidelijke meldingen voor gescande, beveiligde of ongeldige PDF's.
 - De app maakt onderscheid tussen een PDF die niet gelezen kon worden en een PDF die wel tekst bevat maar geen herkenbare dialoog.
 - Fuzzy rolherkenning en het overslaan van liedteksten blijven behouden.
+
+
+## Versie 20: echte PDF-reparatie
+
+De fout zat niet in de PDF, maar in de koppeling met PDF.js:
+
+- versie 19 laadde PDF.js als ES-module;
+- de parser zocht vervolgens naar de oude globale variabele `pdfjsLib`;
+- daardoor werd geen PDF gelezen en verscheen ten onrechte een melding over afbeeldingen of scans.
+
+Versie 20:
+- laadt PDF.js rechtstreeks vanuit de parser met `import()`;
+- probeert zowel cdnjs als jsDelivr;
+- configureert de bijpassende worker;
+- gebruikt daarna nog steeds twee tekstextractiemethoden;
+- onderscheidt een laad-/internetfout van een PDF zonder tekst;
+- behoudt fuzzy rolherkenning, afzonderlijke genummerde rollen en het overslaan van liedteksten.

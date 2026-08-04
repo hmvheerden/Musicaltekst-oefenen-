@@ -268,10 +268,58 @@ window.ScriptParser = (() => {
   function roles(lines){
     return groupRoles(lines).map(group=>group.canonical).sort((a,b)=>a.localeCompare(b,"nl"));
   }
+
+  async function loadPdfJsLibrary(){
+    if(window.pdfjsLib&&typeof window.pdfjsLib.getDocument==="function"){
+      return window.pdfjsLib;
+    }
+    if(window.__musicalPdfJs&&typeof window.__musicalPdfJs.getDocument==="function"){
+      return window.__musicalPdfJs;
+    }
+
+    if(!window.__musicalPdfJsPromise){
+      window.__musicalPdfJsPromise=(async()=>{
+        const urls=[
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs",
+          "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs"
+        ];
+        let lastError=null;
+
+        for(const url of urls){
+          try{
+            const module=await import(url);
+            if(module&&typeof module.getDocument==="function"){
+              if(module.GlobalWorkerOptions){
+                module.GlobalWorkerOptions.workerSrc=url.replace("pdf.min.mjs","pdf.worker.min.mjs");
+              }
+              window.__musicalPdfJs=module;
+              return module;
+            }
+          }catch(error){
+            lastError=error;
+            console.warn("PDF.js laden mislukt vanaf",url,error);
+          }
+        }
+
+        throw new Error(
+          "De PDF-lezer kon niet worden geladen. Controleer je internetverbinding en vernieuw de app volledig."
+          +(lastError?.message?` (${lastError.message})`:"")
+        );
+      })();
+    }
+
+    try{
+      return await window.__musicalPdfJsPromise;
+    }catch(error){
+      window.__musicalPdfJsPromise=null;
+      throw error;
+    }
+  }
+
   async function extractPdfWithPdfJs(file){
-    if(typeof pdfjsLib==="undefined")throw new Error("De PDF-bibliotheek is niet geladen.");
+    const pdfjs=await loadPdfJsLibrary();
     const buffer=await file.arrayBuffer();
-    const pdf=await pdfjsLib.getDocument({data:buffer,disableWorker:true}).promise;
+    const pdf=await pdfjs.getDocument({data:buffer}).promise;
     const pages=[];
 
     for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
@@ -324,9 +372,9 @@ window.ScriptParser = (() => {
   }
 
   async function extractPdfFallback(file){
-    if(typeof pdfjsLib==="undefined")throw new Error("De PDF-bibliotheek is niet geladen.");
+    const pdfjs=await loadPdfJsLibrary();
     const buffer=await file.arrayBuffer();
-    const pdf=await pdfjsLib.getDocument({data:buffer,disableWorker:true}).promise;
+    const pdf=await pdfjs.getDocument({data:buffer}).promise;
     const pages=[];
 
     for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
@@ -357,12 +405,31 @@ window.ScriptParser = (() => {
   }
 
   function explainPdfFailure(error,text){
-    const message=String(error?.message||error||"").toLowerCase();
-    if(message.includes("password"))return "Deze PDF is beveiligd met een wachtwoord.";
-    if(message.includes("invalid pdf"))return "Dit bestand lijkt geen geldige PDF te zijn.";
-    if(message.includes("missing pdf"))return "De PDF kon niet volledig worden geladen.";
-    if(!text||text.trim().length<20)return "Deze PDF bevat waarschijnlijk alleen afbeeldingen of gescande pagina's zonder leesbare tekst.";
-    return "De tekst uit de PDF kon niet goed worden verwerkt.";
+    const original=String(error?.message||error||"");
+    const message=original.toLowerCase();
+
+    if(message.includes("pdf-lezer kon niet worden geladen")||
+       message.includes("failed to fetch dynamically imported module")||
+       message.includes("importing a module script failed")||
+       message.includes("networkerror")){
+      return "De PDF-lezer kon niet worden geladen. Controleer je internetverbinding, sluit de app volledig en open hem opnieuw.";
+    }
+    if(message.includes("password")){
+      return "Deze PDF is beveiligd met een wachtwoord.";
+    }
+    if(message.includes("invalid pdf")){
+      return "Dit bestand lijkt geen geldige PDF te zijn.";
+    }
+    if(message.includes("missing pdf")){
+      return "De PDF kon niet volledig worden geladen.";
+    }
+    if(message.includes("worker")){
+      return "De PDF-lezer kon zijn hulpprogramma niet starten. Vernieuw de app en probeer opnieuw.";
+    }
+    if(!text||text.trim().length<20){
+      return "De PDF is geopend, maar er werd bijna geen tekst gevonden. Probeer dezelfde PDF opnieuw na een volledige verversing, of plak de tekst tijdelijk in het tekstvak.";
+    }
+    return original||"De tekst uit de PDF kon niet goed worden verwerkt.";
   }
 
   async function extractFile(file){
@@ -388,6 +455,10 @@ window.ScriptParser = (() => {
         if(firstText&&firstText.trim().length>=20)return firstText;
       }catch(error){
         firstError=error;
+        const message=String(error?.message||error||"");
+        if(/pdf-lezer kon niet worden geladen|dynamically imported module|module script failed|networkerror/i.test(message)){
+          throw new Error(explainPdfFailure(error,""));
+        }
       }
 
       try{
@@ -395,7 +466,7 @@ window.ScriptParser = (() => {
         if(fallbackText&&fallbackText.trim().length>=20)return fallbackText;
         throw new Error(explainPdfFailure(firstError,fallbackText||firstText));
       }catch(error){
-        throw new Error(explainPdfFailure(error,firstText));
+        throw new Error(explainPdfFailure(firstError||error,firstText));
       }
     }
 

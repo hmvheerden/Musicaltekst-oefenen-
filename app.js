@@ -4,8 +4,8 @@ window.addEventListener("error",event=>{
 });
 
 const KEY="musicaltekst-oefenen-v1";
-async function forceVersion19Refresh(){
-  const marker="mto-v19-cache-reset";
+async function forceVersion20Refresh(){
+  const marker="mto-v20-cache-reset";
   if(localStorage.getItem(marker))return;
   localStorage.setItem(marker,"1");
   if("caches" in window){
@@ -588,11 +588,11 @@ window.deleteSession=id=>{if(confirm("Deze sessie verwijderen?")){state.sessions
 function calcStreak(){const days=[...new Set(state.sessions.map(x=>x.started.slice(0,10)))].sort().reverse();let n=0,d=new Date();for(const day of days){const want=d.toISOString().slice(0,10);if(day===want){n++;d.setDate(d.getDate()-1)}else if(n===0){d.setDate(d.getDate()-1);if(day===d.toISOString().slice(0,10)){n++;d.setDate(d.getDate()-1)}else break}else break}return n}
 function formatDate(x){return new Intl.DateTimeFormat("nl-NL",{dateStyle:"medium",timeStyle:"short"}).format(new Date(x))}
 $("#exportBtn").onclick=()=>download("musicaltekst-oefenen-backup.json",JSON.stringify(state,null,2),"application/json");
-$("#importFile").onchange=async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!data.scripts||!data.settings)throw Error();state={...defaultState,...data};save();forceVersion19Refresh();ensureDataShape();applySettings();renderDashboard();toast("Back-up geïmporteerd")}catch{toast("Ongeldig back-upbestand")}};
+$("#importFile").onchange=async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!data.scripts||!data.settings)throw Error();state={...defaultState,...data};save();forceVersion20Refresh();ensureDataShape();applySettings();renderDashboard();toast("Back-up geïmporteerd")}catch{toast("Ongeldig back-upbestand")}};
 function download(name,content,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
-$("#deleteAllBtn").onclick=async()=>{if(confirm("Alle scripts, voortgang en instellingen definitief verwijderen?")){localStorage.removeItem(KEY);try{await clearRecordings()}catch{}state=structuredClone(defaultState);forceVersion19Refresh();ensureDataShape();applySettings();renderDashboard();toast("Alle gegevens verwijderd")}};
+$("#deleteAllBtn").onclick=async()=>{if(confirm("Alle scripts, voortgang en instellingen definitief verwijderen?")){localStorage.removeItem(KEY);try{await clearRecordings()}catch{}state=structuredClone(defaultState);forceVersion20Refresh();ensureDataShape();applySettings();renderDashboard();toast("Alle gegevens verwijderd")}};
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("service-worker.js"));
-forceVersion19Refresh();ensureDataShape();applySettings();renderDashboard();
+forceVersion20Refresh();ensureDataShape();applySettings();renderDashboard();
 $("#nextLearnBtn").onclick=()=>{
   learn.index++;
   if(learn.index>=learn.queue.length){
